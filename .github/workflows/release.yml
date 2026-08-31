@@ -117,11 +117,13 @@ jobs:
           "dist-exe/paper-harness-$PLATFORM-rg"
 
       - name: Smoke boot (--profile paper --help)
+        shell: bash
         env:
           PLATFORM: ${{ steps.outputs.outputs.platform }}
-        run: >-
-          "$PWD/dist-exe/paper-harness-$PLATFORM${{ matrix.target == 'node24-win-x64' && '.exe' || '' }}"
-          --profile paper --help
+        run: |
+          exe="$PWD/dist-exe/paper-harness-$PLATFORM"
+          [ "$PLATFORM" = "win-x64" ] && exe="$exe.exe"
+          "$exe" --profile paper --help
 
       - uses: actions/upload-artifact@v7
         with:
