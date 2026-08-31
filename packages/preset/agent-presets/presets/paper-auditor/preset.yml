@@ -1,0 +1,3 @@
+name: 论文审计
+description: The auditor of the three-role paper loop: checks source fidelity and citation/vocabulary consistency, judges the review, and issues the machine-readable verdict.
+order: 32

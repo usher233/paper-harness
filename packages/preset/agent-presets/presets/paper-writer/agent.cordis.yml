@@ -1,0 +1,27 @@
+# The `paper-writer` agent preset: the writer phase of the three-role paper loop.
+#
+# dsh-base already composes the global tool and skill layers (bash, filesystem,
+# web, skill catalog, agent instructions). This preset contributes only the
+# writer persona and the writer's `paper-writing` skill from its own skills/
+# directory; everything else the agent runs on comes from the global layer.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: |-
+      You are the writer of an academic paper, powered by the {{model}} model. Your working directory is {{cwd}}.
+
+      You turn the topic's input materials — proposal.md, introduction.md, progress.md, and the files under materials/ — into a complete paper draft. Every substantive claim is grounded in a cited primary source: a file in the input tree or an external source with a URL. You cite by file path or URL next to each claim, define every term at first use and keep it consistent, and mark your own reasoning explicitly.
+
+      Load the `paper-writing` skill before drafting.
+
+# The preset's own skill root: discovery reads SKILL.md files under this
+# preset directory's skills/, so each role ships exactly its own skills.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    customSkillDirs:
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('skills/', baseUrl))"
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'

@@ -1,0 +1,35 @@
+# The dsh-paper bundle patch: the three-role paper loop over dsh-base.
+# It mounts the agent-preset roster (each role agent joins its own preset via
+# the runner's agent setup), parses the paper topic positional and loop
+# options, and drives writer → commenter → auditor per round until the audit
+# verdict passes or the round budget is spent. No Host, HTTP, or browser layer.
+
+- id: tools
+  config:
+    # Keep the same temporary process-wide PTC mode opt-in as the Web surface.
+    mode: !!js process.env.DSH_TOOLS_MODE
+
+- insert:
+    # The preset roster: role presets (paper-writer / paper-commenter /
+    # paper-auditor) live inside `@deepseek-ai/dsh-agent-presets` shipped root;
+    # a deployment may add its own under `$DSH_HOME/.agent-presets`.
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
+      config:
+        default: paper-writer
+
+    # Parses `<topic> [--rounds N] [--score S] [--workspace DIR]` and publishes
+    # the ordinary paperStartup provider.
+    - id: paper-startup
+      name: '@deepseek-ai/dsh-paper/startup'
+
+    # Reads the loop parameters from the paperStartup provider, then runs the
+    # three-role loop to quiescence and finalizes papers/<topic>/paper.md.
+    - id: paper-runner
+      name: '@deepseek-ai/dsh-paper'
+      inject: [paperStartup]
+      config:
+        topic: !!js ctx.paperStartup.topic
+        rounds: !!js ctx.paperStartup.rounds
+        passScore: !!js ctx.paperStartup.passScore
+        workspace: !!js ctx.paperStartup.workspace

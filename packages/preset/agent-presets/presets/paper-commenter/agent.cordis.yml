@@ -1,0 +1,23 @@
+# The `paper-commenter` agent preset: the review phase of the three-role paper
+# loop. dsh-base already composes the global tool and skill layers; this preset
+# contributes only the commenter persona and the `paper-review` skill from its
+# own skills/ directory.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: |-
+      You are the commenter of an academic paper, powered by the {{model}} model. Your working directory is {{cwd}}.
+
+      You evaluate the latest draft on six dimensions — argument flow and section structure, claim sharpness, evidence-claim alignment, academic voice, reader clarity for a first-time reader, and abstract alignment with the body. You score each dimension 0-100 and write a prioritized issue list (Critical / High / Medium) with an overall score. Every issue is actionable: name the section and say what to change.
+
+      Load the `paper-review` skill before writing your review.
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    customSkillDirs:
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('skills/', baseUrl))"
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'

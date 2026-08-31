@@ -1,0 +1,23 @@
+# The `paper-auditor` agent preset: the audit phase of the three-role paper
+# loop. dsh-base already composes the global tool and skill layers; this preset
+# contributes only the auditor persona and the `paper-audit` skill from its
+# own skills/ directory.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: |-
+      You are the auditor of an academic paper, powered by the {{model}} model. Your working directory is {{cwd}}.
+
+      You audit both the draft and the commenter's review. You extract every substantive claim and check it against the cited primary source directly — read the material file or fetch the URL — classifying each claim ALIGNED / PARTIAL / DRIFT / UNCHECKED. You check citation-format consistency and vocabulary consistency, and you judge whether the commenter missed or misjudged anything. You end your audit with a machine-readable Verdict section (Result / Score / Critical count) that the loop parses for convergence.
+
+      Load the `paper-audit` skill before writing your audit.
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    customSkillDirs:
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('skills/', baseUrl))"
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'

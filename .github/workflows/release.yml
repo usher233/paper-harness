@@ -1,0 +1,153 @@
+name: Release paper-harness
+
+# Package the paper-harness CLI as standalone single-file executables and
+# publish them to a GitHub Release, so Windows/macOS/Linux users can run the
+# three-role paper loop without Node or pnpm. The native Windows and Linux
+# binaries are built on their target host runners; pkg embeds the Node runtime
+# and the full Cordis plugin closure (scripts/build-exe-for-paper.ts).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the binaries to (created at the default branch HEAD if it does not exist), e.g. v0.1.0
+        required: false
+        default: v0.1.0
+      draft:
+        description: Create the release as a draft; publish it later from the Releases page.
+        type: boolean
+        required: false
+        default: true
+
+concurrency:
+  group: release-paper-harness-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  # CI runs must never report to the production telemetry endpoint baked into
+  # apps/cli/cordis.yml (AppCLIEntry disables the row when set).
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: node24-win-x64
+            runner: windows-2025
+          - target: node24-linux-x64
+            runner: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+
+      - name: Enable Windows Developer Mode (symlink support)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
+          /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # Cache pkg's target Node binary; lockfile changes roll the exact key
+      # while the restore prefix can seed its replacement.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pkg-cache
+          key: pkg-fetch-${{ matrix.target }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pkg-fetch-${{ matrix.target }}-
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build single-exe
+        env:
+          DSH_BUILD_CLIENT_PROFILE: official
+        run: pnpm exec tsx scripts/build-exe-for-paper.ts --targets=${{ matrix.target }}
+
+      - name: Resolve platform outputs
+        id: outputs
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          platform="${TARGET#node24-}"
+          case "$platform" in
+            win-x64|linux-x64) ;;
+            *) echo "::error::Unsupported platform $platform"; exit 1 ;;
+          esac
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "zip=$PWD/dist-exe/paper-harness-$platform.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Package release zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          PLATFORM: ${{ steps.outputs.outputs.platform }}
+        run: >-
+          Compress-Archive -Path "dist-exe\paper-harness-$env:PLATFORM.exe","dist-exe\paper-harness-$env:PLATFORM-rg.exe"
+          -DestinationPath "dist-exe\paper-harness-$env:PLATFORM.zip" -Force
+
+      - name: Package release zip (POSIX)
+        if: runner.os != 'Windows'
+        env:
+          PLATFORM: ${{ steps.outputs.outputs.platform }}
+          ZIP: ${{ steps.outputs.outputs.zip }}
+        run: >
+          zip -j "$ZIP"
+          "dist-exe/paper-harness-$PLATFORM"
+          "dist-exe/paper-harness-$PLATFORM-rg"
+
+      - name: Smoke boot (--profile paper --help)
+        env:
+          PLATFORM: ${{ steps.outputs.outputs.platform }}
+        run: >-
+          "$PWD/dist-exe/paper-harness-$PLATFORM${{ matrix.target == 'node24-win-x64' && '.exe' || '' }}"
+          --profile paper --help
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: paper-harness-${{ steps.outputs.outputs.platform }}-zip
+          path: dist-exe/paper-harness-${{ steps.outputs.outputs.platform }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish release ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        run: |
+          set -euo pipefail
+          # gh is preinstalled and authed via GITHUB_TOKEN; it creates the tag
+          # at the default branch HEAD when it does not already exist.
+          gh release create "$TAG" release-artifacts/*.zip \
+            --title "$TAG" \
+            --generate-notes \
+            --draft=${{ inputs.draft || 'false' }}
