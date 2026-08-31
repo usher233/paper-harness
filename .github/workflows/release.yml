@@ -1,3 +1,4 @@
+# v0.1.0 — initial public release
 name: Release paper-harness
 
 # Package the paper-harness CLI as standalone single-file executables and
