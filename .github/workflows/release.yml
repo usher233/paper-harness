@@ -152,9 +152,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # gh is preinstalled and authed via GITHUB_TOKEN; it creates the tag
-          # at the default branch HEAD when it does not already exist.
-          gh release create "$TAG" release-artifacts/*.zip \
+          # gh is preinstalled and authed via GH_TOKEN; -R pins the repo because
+          # this job never checks out .git (it only downloads artifacts). gh
+          # creates the tag at the default branch HEAD when it does not exist.
+          gh release create -R "$GITHUB_REPOSITORY" "$TAG" release-artifacts/*.zip \
             --title "$TAG" \
             --generate-notes \
             --draft=${{ inputs.draft || 'false' }}
